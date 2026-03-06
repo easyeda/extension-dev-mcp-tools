@@ -47,8 +47,18 @@ npm run mcp-config
 在 AI 对话中：
 
 ```
-请帮我在嘉立创EDA导入插件
-请帮我在嘉立创EDA导入并调试插件
-请帮我看下日志，为什么插件不起作用
+帮我导入你生成的插件并测试
 ```
+![img1](https://github.com/user-attachments/assets/6b3cb0e8-f91e-450f-97da-abdd474a9a23)
+```
+好的，我已完成登录
+```
+![img2](https://github.com/user-attachments/assets/4e8efe02-e343-45e3-aebf-ccc404de5297)
+```
+功能无法使用，看看什么问题
+```
+![img3](https://github.com/user-attachments/assets/463ef725-396e-493d-94a7-3cf61bc0ab31)
+
+
+
 
