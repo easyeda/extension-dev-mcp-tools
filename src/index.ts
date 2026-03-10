@@ -11,7 +11,7 @@ const server = new McpServer({
 
 server.tool(
   "import_plugin",
-  "将本地插件文件导入到嘉立创EDA。自动打开浏览器访问立创EDA，如果未登录会弹出扫码登录页面等待用户扫码，登录后自动执行：高级→扩展管理器→上传插件文件→导入。登录状态会缓存，下次无需重复登录。",
+  "将本地插件文件导入到嘉立创EDA。插件文件通常位于项目的 build/dist 目录下，后缀为 .eext。调用前请先确认 pluginPath 指向该目录下的 .eext 文件。自动打开浏览器访问立创EDA，如果未登录会弹出扫码登录页面等待用户扫码，登录后自动执行：高级→扩展管理器→上传插件文件→导入。登录状态会缓存，下次无需重复登录。",
   {
     pluginPath: z.string().describe("插件文件的绝对路径"),
   },
@@ -20,7 +20,7 @@ server.tool(
 
 server.tool(
   "dev_plugin",
-  "导入插件到嘉立创EDA并开启浏览器控制台监听。导入后自动捕获所有console输出（log/warn/error/info）和页面错误。用于插件开发调试，导入后可通过 get_console_logs 获取控制台输出。",
+  "导入插件到嘉立创EDA并开启浏览器控制台监听。插件文件通常位于项目的 build/dist 目录下，后缀为 .eext。调用前请先确认 pluginPath 指向该目录下的 .eext 文件。导入后自动捕获所有console输出（log/warn/error/info）和页面错误。用于插件开发调试，导入后可通过 get_console_logs 获取控制台输出。",
   {
     pluginPath: z.string().describe("插件文件的绝对路径"),
   },

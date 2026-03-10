@@ -23,7 +23,31 @@
 ## 环境要求
 
 - Node.js 20.17.0+
-- Google Chrome（建议安装路径：`C:\Program Files\Google\Chrome\Application\chrome.exe`）
+- Google Chrome  
+
+### 调试用浏览器路径配置（可选）
+
+工具会自动查找 Chrome 安装路径：
+- Windows：查注册表 `App Paths` 或常见安装位置
+- macOS：`/Applications/Google Chrome.app/...`
+- Linux：通过 `which` 查找 `google-chrome` / `chromium` 
+
+如果自动检测失败，或需要使用特定浏览器，可设置环境变量：
+
+```bash
+# Windows (PowerShell)
+$env:CHROME_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+# macOS / Linux
+export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+```
+
+## 已测试的平台
+
+✅Kiro  
+✅Trae  
+✅QwenCode  
+✅OpenClaw  
 
 ## 安装
 
@@ -42,22 +66,27 @@ npm run mcp-config
 
 将生成的MCP配置文件```mcp-config.json```按照你所使用的AI Agent提供的文档导入
 
+
 ## 使用示例
 
 在 AI 对话中：
 
 ```
-帮我导入你生成的插件并测试
+帮我导入插件
 ```
-![img1](https://github.com/user-attachments/assets/6b3cb0e8-f91e-450f-97da-abdd474a9a23)
+![img](https://github.com/user-attachments/assets/adebd86a-da60-4653-abd5-ec56943823d4)
+
 ```
-好的，我已完成登录
+已完成登录
 ```
-![img2](https://github.com/user-attachments/assets/4e8efe02-e343-45e3-aebf-ccc404de5297)
+
+![img](https://github.com/user-attachments/assets/861ee48e-6202-45e4-a418-ad178f90ba30)
+
 ```
-功能无法使用，看看什么问题
+分析下现在的日志
 ```
-![img3](https://github.com/user-attachments/assets/463ef725-396e-493d-94a7-3cf61bc0ab31)
+![img](https://github.com/user-attachments/assets/1aac01ee-18ac-4bb4-95c8-e3da444aac30)
+
 
 
 
