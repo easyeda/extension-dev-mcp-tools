@@ -45,7 +45,7 @@ export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 ## 已测试的平台
   
 ✅OpenClaw  
-✅OpenCode
+✅OpenCode  
 ✅Kiro  
 ✅Trae  
 ✅QwenCode  
