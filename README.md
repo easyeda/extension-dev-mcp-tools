@@ -1,4 +1,4 @@
-# mcp-eext-dev-tools
+# extension-dev-mcp-tools
 
 用于 嘉立创EDA & EasyEDA 专业版扩展开发与调试的 MCP 服务。使用此MCP可以实现通过 AI Agent 自动完成插件导入、浏览器控制台日志采集等操作，由AI自动开发、构建、调试插件。
 
@@ -6,8 +6,8 @@
 
 | 工具 | 说明 |
 |------|------|
-| `import_plugin` | 将本地插件文件导入到嘉立创EDA专业版 |
-| `dev_plugin` | 导入插件并开启控制台日志监听 |
+| `import_plugin` | 自动将eext导入到嘉立创EDA专业版 |
+| `dev_plugin` | 导入插件并开启控制台错误日志持续监听 |
 | `get_console_logs` | 获取浏览器控制台输出（支持过滤、分页、清空） |
 
 ## 工作原理
@@ -16,7 +16,7 @@
 2. 自动在浏览器中打开嘉立创EDA专业版调试模式，未登录时自动弹出扫码登录页面
 3. 登录状态缓存在 `.browser-data/` 目录，后续无需重复登录
 4. 通过 Playwright 操作浏览器完成插件上传流程
-5. `dev_plugin` 导入后自动注册页面 `console` 和 `pageerror` 事件监听，捕获所有 log / warn / error / info 输出，最多缓存 500 条
+5. `import_plugin` 导入后自动注册页面 `console` 和 `pageerror` 事件监听，捕获所有 log / warn / error / info 输出，最多缓存 500 条
 6. 通过 `get_console_logs` 随时拉取缓存日志，支持按类型或关键词过滤、限制返回条数、获取后清空缓存
 7. AI Agent可按获取到的日志情况分析插件运行状态，以便对插件源码调整
 
@@ -43,11 +43,12 @@ export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 ```
 
 ## 已测试的平台
-
+  
+✅OpenClaw  
+✅OpenCode
 ✅Kiro  
 ✅Trae  
 ✅QwenCode  
-✅OpenClaw  
 
 ## 安装
 

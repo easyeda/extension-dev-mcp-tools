@@ -23,7 +23,6 @@ function startConsoleListener(p: Page) {
       type: msg.type(),
       text: msg.text(),
     });
-    // 保留最近 MAX_LOGS 条
     if (consoleLogs.length > MAX_LOGS) {
       consoleLogs.splice(0, consoleLogs.length - MAX_LOGS);
     }
@@ -38,8 +37,64 @@ function startConsoleListener(p: Page) {
   });
 }
 
-/** 导入插件并开始监听控制台 */
-export async function devPlugin(args: { pluginPath: string }) {
+/** 执行插件导入操作（共用逻辑） */
+async function doImport(p: Page, pluginPath: string): Promise<string> {
+  await navigateToEditor(p);
+
+  if (!(await ensureLoggedIn(p))) {
+    throw new Error("嘉立创EDA未登录，请先在浏览器中完成登录后再继续操作。");
+  }
+
+  // 窗口小时"高级"菜单可能藏在"更多"按钮里，需要先展开
+  const moreButton = p.locator('.tool-bottom-menu-more_SoDfO');
+  const moreContainer = p.locator('.tool-bottom-menu-more-container_NmJv7');
+  const advancedMenu = p.locator('span[data-test="Advanced"]');
+  const advancedInMore = moreContainer.locator('span[data-test="Advanced"]');
+  
+  // 尝试直接点击高级菜单
+  try {
+    await advancedMenu.click({ timeout: 2000 });
+  } catch {
+    // 如果失败，说明高级菜单藏在"更多"里
+    const containerVisible = await moreContainer.evaluate(el => {
+      const style = window.getComputedStyle(el);
+      return style.visibility === 'visible';
+    }).catch(() => false);
+    
+    if (!containerVisible) {
+      await moreButton.click();
+      await moreContainer.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    }
+    // 使用 JS 点击高级菜单
+    await advancedInMore.evaluate((el: HTMLElement) => el.click());
+  }
+  
+  await p.waitForTimeout(300); // 等待高级菜单展开
+  await p.getByText("扩展管理器", { exact: false }).click({ timeout: 10000 });
+
+  const modal = p.locator("[class*='lc_modal_dialog']").first();
+  await modal.waitFor({ state: "visible", timeout: 10000 });
+
+  const [fileChooser] = await Promise.all([
+    p.waitForEvent("filechooser", { timeout: 10000 }),
+    modal.locator("button", { hasText: "导入" }).click(),
+  ]);
+  await fileChooser.setFiles(pluginPath);
+  await p.waitForTimeout(2000);
+
+  const closeBtn = modal.locator("[class*='close']").first();
+  if (await closeBtn.isVisible().catch(() => false)) {
+    await closeBtn.click();
+  } else {
+    await p.keyboard.press("Escape");
+  }
+  await p.waitForTimeout(300);
+
+  return path.basename(pluginPath);
+}
+
+/** import_plugin：导入插件并开启控制台监听，立即返回 */
+export async function importPlugin(args: { pluginPath: string }) {
   if (!fs.existsSync(args.pluginPath)) {
     return { type: "text" as const, text: `文件不存在: ${args.pluginPath}` };
   }
@@ -47,47 +102,77 @@ export async function devPlugin(args: { pluginPath: string }) {
   const p = await getPage();
 
   try {
-    await navigateToEditor(p);
+    consoleLogs.length = 0;
+    startConsoleListener(p);
+    const name = await doImport(p, args.pluginPath);
+    return {
+      type: "text" as const,
+      text: `插件导入成功: ${name}。已开启控制台监听，可通过 get_console_logs 获取调试日志。`,
+    };
+  } catch (error: any) {
+    return { type: "text" as const, text: error.message.includes("未登录") ? error.message : `导入失败: ${error.message}` };
+  }
+}
 
-    if (!(await ensureLoggedIn(p))) {
+/** dev_plugin：导入插件后持续监听，等到出现 error 日志才返回 */
+export async function devPlugin(args: { pluginPath: string; timeout?: number }) {
+  if (!fs.existsSync(args.pluginPath)) {
+    return { type: "text" as const, text: `文件不存在: ${args.pluginPath}` };
+  }
+
+  const p = await getPage();
+
+  try {
+    consoleLogs.length = 0;
+    startConsoleListener(p);
+    const name = await doImport(p, args.pluginPath);
+
+    // 等待 error 日志出现，超时则返回无错误
+    // 导入后 5 秒内的错误忽略（可能是其他扩展的残留错误）
+    const maxWait = (args.timeout || 300) * 1000;
+    const startTime = Date.now();
+    const graceEnd = startTime + 5000;
+
+    const errorLogs = await new Promise<ConsoleEntry[]>((resolve) => {
+      let collectDeadline: number | null = null;
+
+      const interval = setInterval(() => {
+        const errors = consoleLogs.filter(
+          (l) => l.type === "error" && new Date(l.timestamp).getTime() >= graceEnd
+        );
+
+        if (errors.length > 0 && collectDeadline === null) {
+          // 收到第一条 error，再等 5 秒收集更多
+          collectDeadline = Date.now() + 5000;
+        }
+
+        if (collectDeadline !== null && Date.now() >= collectDeadline) {
+          // 5 秒收集窗口结束，返回所有 error
+          clearInterval(interval);
+          const allErrors = consoleLogs.filter(
+            (l) => l.type === "error" && new Date(l.timestamp).getTime() >= graceEnd
+          );
+          resolve(allErrors);
+        } else if (Date.now() - startTime > maxWait) {
+          clearInterval(interval);
+          resolve([]);
+        }
+      }, 500);
+    });
+
+    if (errorLogs.length > 0) {
       return {
         type: "text" as const,
-        text: "嘉立创EDA未登录，请先在浏览器中完成登录后再继续操作。",
+        text: `插件 ${name} 导入后检测到 ${errorLogs.length} 条错误:\n${formatLogs(errorLogs)}`,
       };
     }
 
-    // 清空之前的日志，开始监听
-    consoleLogs.length = 0;
-    startConsoleListener(p);
-
-    // 高级 → 扩展管理器
-    await p.locator('span[data-test="Advanced"]').click();
-    await p.getByText("扩展管理器(E)...").click();
-
-    const modal = p.locator("[class*='lc_modal_dialog']").first();
-    await modal.waitFor({ state: "visible", timeout: 10000 });
-
-    const [fileChooser] = await Promise.all([
-      p.waitForEvent("filechooser", { timeout: 10000 }),
-      modal.locator("button", { hasText: "导入" }).click(),
-    ]);
-    await fileChooser.setFiles(args.pluginPath);
-    await p.waitForTimeout(2000);
-
-    const closeBtn = modal.locator("[class*='close']").first();
-    if (await closeBtn.isVisible().catch(() => false)) {
-      await closeBtn.click();
-    } else {
-      await p.keyboard.press("Escape");
-    }
-    await p.waitForTimeout(300);
-
     return {
       type: "text" as const,
-      text: `插件导入成功: ${path.basename(args.pluginPath)}。请先在嘉立创EDA中手动测试插件功能，如果遇到问题再调用 get_console_logs 获取调试日志。`,
+      text: `插件 ${name} 导入成功，监听 ${args.timeout || 300} 秒内未检测到错误。`,
     };
   } catch (error: any) {
-    return { type: "text" as const, text: `导入失败: ${error.message}` };
+    return { type: "text" as const, text: error.message.includes("未登录") ? error.message : `导入失败: ${error.message}` };
   }
 }
 

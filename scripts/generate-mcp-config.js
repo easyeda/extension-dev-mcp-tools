@@ -20,14 +20,28 @@ const mcpConfig = {
   }
 };
 
+// 生成 opencode 配置
+const opencodeConfig = {
+  "$schema": "https://opencode.ai/config.json",
+  mcp: {
+    'mcp-eext-dev-tools': {
+      type: 'local',
+      command: ['node', distPath],
+      enabled: true,
+    }
+  }
+};
+
 // 写入配置文件
 const configPath = path.join(projectRoot, 'mcp-config.json');
 fs.writeFileSync(configPath, JSON.stringify(mcpConfig, null, 2) + '\n');
 
+const opencodeConfigPath = path.join(projectRoot, 'opencode.json');
+fs.writeFileSync(opencodeConfigPath, JSON.stringify(opencodeConfig, null, 2) + '\n');
+
 console.log('✅ MCP 配置文件已生成:');
-console.log(`   路径: ${configPath}`);
+console.log(`   通用配置: ${configPath}`);
+console.log(`   OpenCode: ${opencodeConfigPath}`);
 console.log(`   入口: ${distPath}`);
-console.log('\n📋 配置内容:');
-console.log(JSON.stringify(mcpConfig, null, 2));
 console.log('\n💡 使用方法:');
 console.log('   按照您所使用的AI Agent查看对应的MCP配置说明配置');

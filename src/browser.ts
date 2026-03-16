@@ -99,12 +99,36 @@ function launchChrome() {
   child.unref();
 }
 
+async function connectCDP(): Promise<Browser> {
+  // 最多重试 2 次，首次失败时清理旧连接后重试
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await chromium.connectOverCDP(`http://127.0.0.1:${REMOTE_DEBUG_PORT}`);
+    } catch (err: any) {
+      if (attempt === 0 && err.message?.includes("Browser context management")) {
+        // 旧 CDP 连接残留，断开后重试
+        if (browser) {
+          await browser.close().catch(() => {});
+          browser = null;
+          page = null;
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("CDP 连接失败");
+}
+
 export async function getPage(): Promise<Page> {
   if (browser && page) {
     try {
       await page.title();
       return page;
     } catch {
+      // 连接已断开，清理后重新连接
+      await browser?.close().catch(() => {});
       browser = null;
       page = null;
     }
@@ -117,15 +141,19 @@ export async function getPage(): Promise<Page> {
       await new Promise((r) => setTimeout(r, 1000));
       if (await isCDPReachable()) break;
     }
+    if (!(await isCDPReachable())) {
+      throw new Error("Chrome 启动超时，CDP 端口未就绪");
+    }
   }
 
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${REMOTE_DEBUG_PORT}`);
+  browser = await connectCDP();
   const contexts = browser.contexts();
-  const ctx = contexts[0] || (await browser.newContext());
-  const pages = ctx.pages();
-  if (pages.length > 0) {
-    page = pages[0];
+  // 优先复用已有 context，避免触发 setDownloadBehavior 冲突
+  if (contexts.length > 0) {
+    const pages = contexts[0].pages();
+    page = pages.length > 0 ? pages[0] : await contexts[0].newPage();
   } else {
+    const ctx = await browser.newContext();
     page = await ctx.newPage();
   }
   return page;
