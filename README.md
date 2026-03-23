@@ -1,6 +1,8 @@
+[English](./README.en.md) | 中文
+
 # extension-dev-mcp-tools
 
-用于 嘉立创EDA & EasyEDA 专业版扩展开发与调试的 MCP 服务。使用此MCP可以实现通过 AI Agent 自动完成插件导入、浏览器控制台日志采集等操作，由AI自动开发、构建、调试插件。
+用于 嘉立创EDA & EasyEDA 专业版扩展调试的 MCP 服务。使用此MCP可以实现通过 AI Agent 自动完成插件导入、浏览器控制台日志采集等操作，由AI自动导入、调试插件。
 
 ## 功能
 
@@ -46,16 +48,20 @@ export CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
   
 ✅OpenClaw  
 ✅OpenCode  
+✅QwenCode  
 ✅Kiro  
 ✅Trae  
-✅QwenCode  
 
-## 安装
+
+## 安装并构建
 
 ```bash
+git clone https://github.com/easyeda/extension-dev-mcp-tools
+cd ./extension-dev-mcp-tools
 npm install
 npm run build
 ```
+构建后产物位于`dist`文件夹下
 
 ## 配置 MCP
 
@@ -68,25 +74,11 @@ npm run mcp-config
 将生成的MCP配置文件```mcp-config.json```按照你所使用的AI Agent提供的文档导入
 
 
-## 使用示例
+## 演示视频
 
-在 AI 对话中：
+基于opencode:  
 
-```
-帮我导入插件
-```
-![img](https://github.com/user-attachments/assets/adebd86a-da60-4653-abd5-ec56943823d4)
-
-```
-已完成登录
-```
-
-![img](https://github.com/user-attachments/assets/861ee48e-6202-45e4-a418-ad178f90ba30)
-
-```
-分析下现在的日志
-```
-![img](https://github.com/user-attachments/assets/1aac01ee-18ac-4bb4-95c8-e3da444aac30)
+https://github.com/user-attachments/assets/45a66a9c-96e5-43a4-a9af-c94d2007f1a3
 
 
 
