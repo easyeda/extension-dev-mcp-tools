@@ -10,7 +10,7 @@ const distPath = path.join(projectRoot, 'dist', 'index.js');
 // 生成 MCP 配置
 const mcpConfig = {
   mcpServers: {
-    'mcp-eext-dev-tools': {
+    'extension-dev-mcp-tools': {
       command: 'node',
       args: [distPath],
       env: {},
@@ -24,7 +24,7 @@ const mcpConfig = {
 const opencodeConfig = {
   "$schema": "https://opencode.ai/config.json",
   mcp: {
-    'mcp-eext-dev-tools': {
+    'extension-dev-mcp-tools': {
       type: 'local',
       command: ['node', distPath],
       enabled: true,

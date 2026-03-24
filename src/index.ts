@@ -4,7 +4,7 @@ import { z } from "zod";
 import { importPlugin, devPlugin, getConsoleLogs } from "./tools/dev-plugin.js";
 
 const server = new McpServer({
-  name: "mcp-eext-dev-tools",
+  name: "extension-dev-mcp-tools",
   version: "1.0.0",
 });
 
@@ -41,7 +41,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("mcp-eext-dev-tools MCP Server started");
+  console.error("extension-dev-mcp-tools MCP Server started");
 }
 
 main().catch((err) => {

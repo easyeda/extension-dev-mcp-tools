@@ -1,5 +1,5 @@
 {
-  "name": "mcp-eext-dev-tools",
+  "name": "extension-dev-mcp-tools",
   "version": "1.3.2",
   "description": "MCP service for AI development and debugging of JLCEDA plugins",
   "main": "dist/index.js",
