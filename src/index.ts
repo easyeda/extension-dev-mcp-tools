@@ -13,6 +13,7 @@ server.tool(
   "导入插件到嘉立创EDA并开启浏览器控制台监听。插件文件通常位于项目的 build/dist 目录下，后缀为 .eext。调用前请先确认 pluginPath 指向该目录下的 .eext 文件。自动打开浏览器访问立创EDA，如果未登录会弹出扫码登录页面等待用户扫码，登录后自动执行：高级→扩展管理器→上传插件文件→导入。登录状态会缓存，下次无需重复登录。导入后可通过 get_console_logs 获取控制台输出。",
   {
     pluginPath: z.string().describe("插件文件的绝对路径"),
+    browserPath: z.string().optional().describe("浏览器可执行文件的绝对路径（如 Edge、Chrome），不传则自动检测"),
   },
   async (args) => ({ content: [await importPlugin(args)] })
 );
@@ -23,6 +24,7 @@ server.tool(
   {
     pluginPath: z.string().describe("插件文件的绝对路径"),
     timeout: z.number().optional().describe("最大等待秒数，默认300秒（5分钟）"),
+    browserPath: z.string().optional().describe("浏览器可执行文件的绝对路径（如 Edge、Chrome），不传则自动检测"),
   },
   async (args) => ({ content: [await devPlugin(args)] })
 );
@@ -34,6 +36,7 @@ server.tool(
     filter: z.string().optional().describe("过滤关键词，匹配日志类型或内容（如 error、warn、某个函数名）"),
     count: z.number().optional().describe("返回最近N条日志，默认50条"),
     clear: z.boolean().optional().describe("获取后是否清空日志缓存，默认false"),
+    browserPath: z.string().optional().describe("浏览器可执行文件的绝对路径（如 Edge、Chrome），不传则自动检测"),
   },
   async (args) => ({ content: [await getConsoleLogs(args)] })
 );

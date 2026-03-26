@@ -5,17 +5,71 @@ import { execSync, spawn } from "child_process";
 import * as http from "http";
 
 const LCEDA_URL = "https://pro.lceda.cn/editor?cll=debug";
-const USER_DATA_DIR = path.join(__dirname, "..", ".browser-data");
-const REMOTE_DEBUG_PORT = 9222;
+const BASE_USER_DATA_DIR = path.join(__dirname, "..", ".browser-data");
+const DEFAULT_DEBUG_PORT = 9222;
 
-let browser: Browser | null = null;
-let page: Page | null = null;
+// 防止 Playwright CDP 断开时的未捕获异常导致进程崩溃
+process.on("unhandledRejection", (err: any) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("Connection closed") || msg.includes("Target closed") || msg.includes("Browser closed") || msg.includes("Browser has been closed")) {
+    console.error("[browser] suppressed CDP disconnect error:", msg);
+    return;
+  }
+  console.error("[browser] unhandled rejection:", err);
+});
 
-/** 真正尝试 HTTP 请求 CDP /json/version，成功才算浏览器在线 */
-function isCDPReachable(): Promise<boolean> {
+process.on("uncaughtException", (err: any) => {
+  const msg = err?.message || String(err);
+  if (msg.includes("Connection closed") || msg.includes("Target closed") || msg.includes("Browser closed") || msg.includes("Browser has been closed")) {
+    console.error("[browser] suppressed CDP uncaught exception:", msg);
+    return;
+  }
+  console.error("[browser] uncaught exception:", err);
+  process.exit(1);
+});
+
+/** 每个浏览器路径对应一个独立的连接实例 */
+interface BrowserInstance {
+  browser: Browser | null;
+  page: Page | null;
+  port: number;
+  userDataDir: string;
+  browserPath: string;
+}
+
+/** 浏览器路径 -> 实例映射 */
+const instances = new Map<string, BrowserInstance>();
+
+/** 当前活跃的浏览器路径 */
+let currentBrowserPath: string | null = null;
+
+/** 根据浏览器路径生成稳定的端口号（9222-9322 范围） */
+function portForPath(browserPath: string): number {
+  let hash = 0;
+  for (let i = 0; i < browserPath.length; i++) {
+    hash = ((hash << 5) - hash + browserPath.charCodeAt(i)) | 0;
+  }
+  return DEFAULT_DEBUG_PORT + (Math.abs(hash) % 100);
+}
+
+/** 根据浏览器路径获取或创建实例配置 */
+function getInstance(browserPath: string): BrowserInstance {
+  let inst = instances.get(browserPath);
+  if (!inst) {
+    const port = portForPath(browserPath);
+    // 用浏览器名称区分 user-data-dir，避免冲突
+    const name = path.basename(browserPath, path.extname(browserPath)).toLowerCase();
+    const userDataDir = path.join(BASE_USER_DATA_DIR, name);
+    inst = { browser: null, page: null, port, userDataDir, browserPath };
+    instances.set(browserPath, inst);
+  }
+  return inst;
+}
+
+function isCDPReachableOnPort(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get(
-      `http://127.0.0.1:${REMOTE_DEBUG_PORT}/json/version`,
+      `http://127.0.0.1:${port}/json/version`,
       { timeout: 2000 },
       (res) => {
         res.resume();
@@ -27,16 +81,23 @@ function isCDPReachable(): Promise<boolean> {
   });
 }
 
+/** 切换当前活跃浏览器，不关闭旧浏览器 */
+export async function setBrowserPath(p: string | undefined): Promise<boolean> {
+  if (!p) return false;
+  if (currentBrowserPath === p) return false;
+  currentBrowserPath = p;
+  return true;
+}
+
 function getChromePath(): string {
-  // 优先使用环境变量
+  // 1. 运行时参数覆盖 > 2. 环境变量 > 3. 自动检测
+  if (currentBrowserPath) return currentBrowserPath;
   if (process.env["CHROME_PATH"]) return process.env["CHROME_PATH"];
 
   if (process.platform === "win32") {
-    // 优先从注册表查（系统级和用户级安装都能找到）
     const regKeys = [
       "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe",
       "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe",
-      // Edge 备选
       "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\msedge.exe",
     ];
     for (const key of regKeys) {
@@ -49,7 +110,6 @@ function getChromePath(): string {
         }
       } catch { /* 继续尝试 */ }
     }
-    // 注册表找不到时回退到常见路径
     const candidates = [
       process.env["PROGRAMFILES"] + "\\Google\\Chrome\\Application\\chrome.exe",
       process.env["PROGRAMFILES(X86)"] + "\\Google\\Chrome\\Application\\chrome.exe",
@@ -71,13 +131,9 @@ function getChromePath(): string {
     throw new Error("未找到 Chrome，请设置环境变量 CHROME_PATH 指定路径");
   }
 
-  // Linux：用 which 动态查找
   const linuxCandidates = [
-    "google-chrome",
-    "google-chrome-stable",
-    "chromium-browser",
-    "chromium",
-    "microsoft-edge",
+    "google-chrome", "google-chrome-stable",
+    "chromium-browser", "chromium", "microsoft-edge",
   ];
   for (const bin of linuxCandidates) {
     try {
@@ -88,30 +144,26 @@ function getChromePath(): string {
   throw new Error("未找到 Chrome，请设置环境变量 CHROME_PATH 指定路径");
 }
 
-function launchChrome() {
-  const chromePath = getChromePath();
-  const child = spawn(chromePath, [
-    `--remote-debugging-port=${REMOTE_DEBUG_PORT}`,
-    `--user-data-dir=${USER_DATA_DIR}`,
+function launchBrowser(inst: BrowserInstance) {
+  // 确保 user-data-dir 存在
+  if (!fs.existsSync(inst.userDataDir)) {
+    fs.mkdirSync(inst.userDataDir, { recursive: true });
+  }
+  const child = spawn(inst.browserPath, [
+    `--remote-debugging-port=${inst.port}`,
+    `--user-data-dir=${inst.userDataDir}`,
     "--no-first-run",
     "--no-default-browser-check",
   ], { detached: true, stdio: "ignore" });
   child.unref();
 }
 
-async function connectCDP(): Promise<Browser> {
-  // 最多重试 2 次，首次失败时清理旧连接后重试
+async function connectCDP(port: number): Promise<Browser> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await chromium.connectOverCDP(`http://127.0.0.1:${REMOTE_DEBUG_PORT}`);
+      return await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
     } catch (err: any) {
       if (attempt === 0 && err.message?.includes("Browser context management")) {
-        // 旧 CDP 连接残留，断开后重试
-        if (browser) {
-          await browser.close().catch(() => {});
-          browser = null;
-          page = null;
-        }
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
@@ -122,47 +174,50 @@ async function connectCDP(): Promise<Browser> {
 }
 
 export async function getPage(): Promise<Page> {
-  if (browser && page) {
+  const browserPath = getChromePath();
+  const inst = getInstance(browserPath);
+
+  // 尝试复用已有连接
+  if (inst.browser && inst.page) {
     try {
-      await page.title();
-      return page;
+      await inst.page.title();
+      return inst.page;
     } catch {
-      // 连接已断开，清理后重新连接
-      await browser?.close().catch(() => {});
-      browser = null;
-      page = null;
+      if (inst.browser) {
+        try { inst.browser.removeAllListeners(); } catch { /* ignore */ }
+      }
+      inst.browser = null;
+      inst.page = null;
     }
   }
 
-  if (!(await isCDPReachable())) {
-    launchChrome();
-    // 等待 CDP 真正可达，最多 20 秒
+  // 启动浏览器（如果端口未被占用）
+  if (!(await isCDPReachableOnPort(inst.port))) {
+    launchBrowser(inst);
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1000));
-      if (await isCDPReachable()) break;
+      if (await isCDPReachableOnPort(inst.port)) break;
     }
-    if (!(await isCDPReachable())) {
-      throw new Error("Chrome 启动超时，CDP 端口未就绪");
+    if (!(await isCDPReachableOnPort(inst.port))) {
+      throw new Error(`浏览器启动超时，CDP 端口 ${inst.port} 未就绪`);
     }
   }
 
-  browser = await connectCDP();
-  const contexts = browser.contexts();
-  // 优先复用已有 context，避免触发 setDownloadBehavior 冲突
+  inst.browser = await connectCDP(inst.port);
+  const contexts = inst.browser.contexts();
   if (contexts.length > 0) {
     const pages = contexts[0].pages();
-    page = pages.length > 0 ? pages[0] : await contexts[0].newPage();
+    inst.page = pages.length > 0 ? pages[0] : await contexts[0].newPage();
   } else {
-    const ctx = await browser.newContext();
-    page = await ctx.newPage();
+    const ctx = await inst.browser.newContext();
+    inst.page = await ctx.newPage();
   }
-  return page;
+  return inst.page;
 }
 
 async function isLoggedIn(p: Page): Promise<boolean> {
   const count = await p.locator("#login-btn").count();
-  if (count === 0) return true; // 元素不存在，已登录
-  // 元素存在时再检查可见性
+  if (count === 0) return true;
   const isVisible = await p.locator("#login-btn").isVisible().catch(() => false);
   return !isVisible;
 }
@@ -170,10 +225,7 @@ async function isLoggedIn(p: Page): Promise<boolean> {
 export async function ensureLoggedIn(p: Page): Promise<boolean> {
   await p.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   if (await isLoggedIn(p)) return true;
-
-  // 未登录，用 JS 点击绕过可见性限制
   await p.locator("#login-btn").evaluate((el: HTMLElement) => el.click());
-
   return false;
 }
 
@@ -182,7 +234,6 @@ export async function navigateToEditor(p: Page): Promise<void> {
     for (let i = 0; i < 3; i++) {
       try {
         await p.goto(LCEDA_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-        // 等待页面稳定
         await p.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
         return;
       } catch (err) {
@@ -192,4 +243,3 @@ export async function navigateToEditor(p: Page): Promise<void> {
     }
   }
 }
-

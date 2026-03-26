@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Page } from "playwright";
-import { getPage, navigateToEditor, ensureLoggedIn } from "../browser.js";
+import { getPage, navigateToEditor, ensureLoggedIn, setBrowserPath } from "../browser.js";
 
 interface ConsoleEntry {
   timestamp: string;
@@ -94,11 +94,13 @@ async function doImport(p: Page, pluginPath: string): Promise<string> {
 }
 
 /** import_plugin：导入插件并开启控制台监听，立即返回 */
-export async function importPlugin(args: { pluginPath: string }) {
+export async function importPlugin(args: { pluginPath: string; browserPath?: string }) {
   if (!fs.existsSync(args.pluginPath)) {
     return { type: "text" as const, text: `文件不存在: ${args.pluginPath}` };
   }
 
+  const switched = await setBrowserPath(args.browserPath);
+  if (switched) listening = false;
   const p = await getPage();
 
   try {
@@ -115,11 +117,13 @@ export async function importPlugin(args: { pluginPath: string }) {
 }
 
 /** dev_plugin：导入插件后持续监听，等到出现 error 日志才返回 */
-export async function devPlugin(args: { pluginPath: string; timeout?: number }) {
+export async function devPlugin(args: { pluginPath: string; timeout?: number; browserPath?: string }) {
   if (!fs.existsSync(args.pluginPath)) {
     return { type: "text" as const, text: `文件不存在: ${args.pluginPath}` };
   }
 
+  const switched = await setBrowserPath(args.browserPath);
+  if (switched) listening = false;
   const p = await getPage();
 
   try {
@@ -177,7 +181,14 @@ export async function devPlugin(args: { pluginPath: string; timeout?: number }) 
 }
 
 /** 获取控制台日志 */
-export async function getConsoleLogs(args: { clear?: boolean; filter?: string; count?: number }) {
+export async function getConsoleLogs(args: { clear?: boolean; filter?: string; count?: number; browserPath?: string }) {
+  // 即使未调用 import_plugin / dev_plugin，也自动启动监听
+  if (!listening) {
+    await setBrowserPath(args.browserPath);
+    const p = await getPage();
+    startConsoleListener(p);
+  }
+
   const count = args.count || 50;
   let logs = consoleLogs.slice(-count);
 
